@@ -268,7 +268,7 @@ class OdooWritePlan(PlanTask):
       yield '<operationplans>'
       for i in frepple.operationplans():
         if i.ordertype == 'PO':
-          if not i.item or not i.item.source or not i.item.source.startswith('odoo') or i.locked:
+          if not i.item or not i.item.source or not i.item.source.startswith('odoo') or i.status not in ('proposed', 'approved'):
             continue
           cls.exported.append(i)
           yield '<operationplan id="%s" ordertype="PO" item=%s location=%s supplier=%s start="%s" end="%s" quantity="%s" location_id=%s item_id=%s criticality="%d"/>' % (
@@ -278,7 +278,7 @@ class OdooWritePlan(PlanTask):
             int(i.criticality)
             )
         elif i.ordertype == "MO":
-          if not i.operation or not i.operation.source or not i.operation.source.startswith('odoo') or i.locked:
+          if not i.operation or not i.operation.source or not i.operation.source.startswith('odoo') or i.status not in ('proposed', 'approved'):
             continue
           cls.exported.append(i)
           yield '<operationplan id="%s" ordertype="MO" item=%s location=%s operation=%s start="%s" end="%s" quantity="%s" location_id=%s item_id=%s criticality="%d"/>' % (
