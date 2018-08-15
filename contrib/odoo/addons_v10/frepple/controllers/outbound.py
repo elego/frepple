@@ -273,12 +273,18 @@ class exporter(object):
         self.warehouses = set()
         childlocs = {}
         m = self.env['stock.warehouse']
-        recs = m.search([])
+        recs = m.search([('company_id','=',1)])
+        logger.debug("Step 1 Reading locations")
         if recs:
             yield '<!-- warehouses -->\n'
             yield '<locations>\n'
             fields = ['name', 'wh_input_stock_loc_id', 'wh_output_stock_loc_id', 'wh_pack_stock_loc_id', 'wh_qc_stock_loc_id', 'view_location_id']
             for i in recs.read(fields):
+                logger.debug(" i %s" % i)
+                res = '<location name=%s subcategory="%s"><available name=%s/></location>\n' % (
+                    quoteattr(i['name']), i['id'], quoteattr(self.calendar)
+                )
+                logger.debug(" res %s" % res)
                 yield '<location name=%s subcategory="%s"><available name=%s/></location>\n' % (
                     quoteattr(i['name']), i['id'], quoteattr(self.calendar)
                 )
@@ -289,18 +295,19 @@ class exporter(object):
                 childlocs[i['view_location_id'][0]] = i['name']
                 self.warehouses.add(i['name'])
             yield '</locations>\n'
-
+            logger.debug("Step 2 Populate a mapping location-to-warehouse name for later lookups.")
             # Populate a mapping location-to-warehouse name for later lookups
             fields = ['child_ids']
             parent_loc = {}
             m = self.env['stock.location']
-            recs = m.search([])
+            recs = m.search([('company_id','=',1)])
             for i in recs.read(['location_id']):
                 if i['location_id']:
                     parent_loc[i['id']] = i['location_id'][0]
 
             marked = {}
 
+            # parameter loc_id is the integer id
             def fnd_parent(loc_id):  # go up the parent chain to find the warehouse
                 if not marked.get(loc_id):  # ensures O(N) iterations instead of O(N^2)
                     if childlocs.get(loc_id):
@@ -311,11 +318,16 @@ class exporter(object):
                             return parent
                 marked[loc_id] = True
                 return -1
+            logger.debug(" Step 3 go up to parent chain to find the warehouses")
 
             for loc_id in recs:
-                parent = fnd_parent(loc_id)
+                logger.debug("loc_id %s" % loc_id)
+                parent = fnd_parent(loc_id.id)
+                logger.debug("parent %s" % parent)
                 if parent > 0:
-                    self.map_locations[loc_id] = parent
+                    self.map_locations[loc_id.id] = parent
+
+
 
 
     def export_customers(self):
@@ -445,7 +457,14 @@ class exporter(object):
             yield '<items>\n'
             fields = ['id','name', 'code', 'product_tmpl_id', 'seller_ids']
             for i in recs.read(fields):
-                tmpl = self.product_templates[i['product_tmpl_id'][0]]
+                try:
+                    tmpl = self.product_templates[i['product_tmpl_id'][0]]
+                except KeyError, e:
+                    logger.info("Key error %s" % (e))
+                    continue
+                except Exception, e:
+                    logger.info("Error while trying to find a product template: %s" % (e))
+                    continue
                 if i['code']:
                     name = u'[%s] %s' % (i['code'], i['name'])
                 else:
@@ -561,10 +580,36 @@ class exporter(object):
                 # CASE 1: A single operation used for the BOM
                 # All routing steps are collapsed in a single operation.
                 #
-                yield '<operation name=%s size_multiple="1" duration="PT%dH" posttime="P%dD" xsi:type="operation_fixed_time">\n' \
+                # Sum duration_per
+                duration_per = 0.0
+                if i['routing_id']:
+                    for j in mrp_routing_workcenters.get(i['routing_id'][0], []):
+                        duration_per += j[1]
+
+                dur_hour = 0; dur_min = 0; dur_sec = 0;
+                dur_int = int(duration_per)
+                # Restrict to less than a day for safety 
+                if dur_int <= 1440:
+                    dur_sec = int((duration_per - dur_int) * 60)
+                    dur_hour = dur_int / 60
+                    dur_min = dur_int - (dur_int / 60) * 60
+
+                res_duration = 'PT%dH%dM%dS' % (dur_hour, dur_min, dur_sec)
+                logger.debug(" duration per unit %s" % res_duration)
+
+                # ELEGO MGS Fix to calculate with working time per piece for an operation
+                # Original code:
+                #yield '<operation name=%s size_multiple="1" duration="PT%dH" posttime="P%dD" xsi:type="operation_fixed_time">\n' \
+                #  '<item name=%s/><location name=%s/>\n' % (
+                #    quoteattr(operation),
+                #    int(self.product_templates[i['product_tmpl_id'][0]]['produce_delay']),
+                #    self.manufacturing_lead, quoteattr(product_buf['name']), quoteattr(location)
+                #)
+                # New code:
+                yield '<operation name=%s size_multiple="1" duration_per="%s" posttime="P%dD" xsi:type="operation_time_per">\n' \
                   '<item name=%s/><location name=%s/>\n' % (
                     quoteattr(operation),
-                    int(self.product_templates[i['product_tmpl_id'][0]]['produce_delay']),
+                    res_duration,
                     self.manufacturing_lead, quoteattr(product_buf['name']), quoteattr(location)
                 )
                 yield '<flows>\n<flow xsi:type="flow_end" quantity="%f"><item name=%s/></flow>\n' % (
@@ -612,7 +657,8 @@ class exporter(object):
                 if i['routing_id']:
                     yield '<loads>\n'
                     for j in mrp_routing_workcenters.get(i['routing_id'][0], []):
-                        yield '<load quantity="%f"><resource name=%s/></load>\n' % (j[1], quoteattr(j[0]))
+                        #yield '<load quantity="%f"><resource name=%s/></load>\n' % (j[1], quoteattr(j[0]))
+                        yield '<load quantity="%f"><resource name=%s/></load>\n' % (1.0, quoteattr(j[0]))
                     yield '</loads>\n'
             else:
                 #
@@ -719,11 +765,17 @@ class exporter(object):
         stock.warehouse.name -> demand->location
         (if sale.order.picking_policy = 'one' then same as demand.quantity else 1) -> demand.minshipment
         '''
+
         # Get all sales order lines
         m = self.env['sale.order.line']
-        recs = m.search([('state', 'in', ['draft', 'sale'])])
+        recs = m.search(['&',('state', 'in', ['draft', 'sale']),('company_id','=',1)])
         fields = ['qty_delivered', 'state', 'product_id', 'product_uom_qty', 'product_uom', 'order_id']
-        so_line = [i for i in recs.read(fields)]
+
+        #Exclude the copied so's, ELEGO, MGS 
+        m = self.env['sale.order']
+        sale_order_recs = m.search(['&',('company_id','=',1), ('name','not ilike','SO%-%')])
+        sor = [i.id for i in sale_order_recs]
+        so_line = [i for i in recs.read(fields) if i['order_id'][0] in sor]
 
         # Get all sales orders
         m = self.env['sale.order']
@@ -761,6 +813,9 @@ class exporter(object):
               qty = self.convert_qty_uom(qty, i['product_uom'][0], i['product_id'][0])
             minship = j['picking_policy'] == 'one' and qty or 1.0
             priority = 1  # We give all customer orders the same default priority
+
+            #ELEGO MGS Sale order location = production location = first parent location in warehouse
+            location = """WH/Stock"""
 
             if i['state'] == 'draft':
                 # Export draft sale order lines
@@ -830,7 +885,7 @@ class exporter(object):
         '''
         m = self.env['purchase.order.line']
         recs = m.search([
-          '|',('order_id.state', 'not in', ('draft','sent','bid','confirmed')), ('order_id.state', '=', False)
+          '|',('order_id.state', 'not in', ('draft','sent','bid','confirmed')), ('order_id.state', '=', False), ('company_id','=','1')
           ])
         fields = ['name', 'date_planned', 'product_id', 'product_qty', 'qty_received', 'product_uom', 'order_id']
         po_line = [i for i in recs.read(fields)]
@@ -878,29 +933,70 @@ class exporter(object):
         convert mrp.production.product_qty and mrp.production.product_uom -> operationplan.quantity
         mrp.production.date_planned -> operationplan.end
         mrp.production.date_planned -> operationplan.start
-        '1' -> operationplan.locked
+        '1' -> operationplan.locked #FIXME MGS status = 'approved'
         '''
+        #DEBUGGING export of MANUFACTURING Orders, MGS
+        logger.debug("export_manufacturingorders")
         yield '<!-- manufacturing orders in progress -->\n'
         yield '<operationplans>\n'
         m = self.env['mrp.production']
         recs = m.search(['|', ('state', '=', 'in_production'), ('state', '=', 'confirmed')])
         fields = ['bom_id', 'date_start', 'date_planned_start', 'name', 'state', 'product_qty', 'product_uom_id',
                   'location_dest_id', 'product_id']
+        logger.debug("Read MOs")
         for i in recs.read(fields):
+            logger.debug("Found MO %s" % i)
             if i['state'] in ('in_production', 'confirmed', 'ready') and i['bom_id']:
+                logger.debug("Checked MO")
+                logger.debug("map_locations %s"  % self.map_locations)
+                logger.debug("location_dest_id %s"  % i['location_dest_id'][0])
                 # Open orders
                 location = self.map_locations.get(i['location_dest_id'][0], None)
+                # ELEGO Fix Parent location is Bogen Lager DE
+                wh_location = u'BOGEN Lager DE'
+                logger.info("LOC::%s::" % location )
+                logger.info("type location:%s" % type(location) )
+                logger.info("type compare :%s" % type(wh_location) )
+                logger.info("location:%s" % location )
+                logger.info("wh_location:%s" % wh_location )
+                if wh_location == location:
+                    logger.info("location equals")
+                    location = u'WH/Stock'
+                else:
+                    logger.info("location does not equal")
+                logger.info("2 location %s" % location )
+                logger.debug("location %s" % location )
                 operation = u'%d %s @ %s' % (i['bom_id'][0], i['bom_id'][1], location)
+                logger.debug("operation %s" % operation )
                 try:
                     startdate = datetime.strptime(i['date_start'] or i['date_planned_start'], '%Y-%m-%d %H:%M:%S')
-                except:
+                    logger.debug("startdate  %s" % startdate)
+                except Exception as expinst: 
+                    logger.debug("!!!! ATTENTION: Ran in except for startdate.")
+                    logger.debug("Exception %s" % expinst)
+                    logger.debug("We try another format %Y-%m-%d")
+                try:
+                    startdate = datetime.strptime(i['date_start'] or i['date_planned_start'], '%Y-%m-%d')
+                    logger.debug("startdate  %s" % startdate)
+                except Exception as expinst: 
+                    logger.debug("!!!! ATTENTION: Ran in except for startdate 2nd time.")
+                    logger.debug("Exception %s" % expinst)
+                    logger.debug("We stop here !")
                     continue
                 if not location or not operation in self.operations:
-                    continue
+                    for i in self.operations:
+                        logger.debug("op  i: %s " % i)
+                    logger.debug("!!!! ATTENTION: No location no operations in MO operations.")
+                    continue 
                 qty = self.convert_qty_uom(i['product_qty'], i['product_uom_id'][0], i['product_id'][0])
-                yield '<operationplan reference=%s start="%s" end="%s" quantity="%s" locked="true"><operation name=%s/></operationplan>\n' % (
+                logger.debug("quantity: %s " % qty)
+                result = '<operationplan reference=%s start="%s" end="%s" quantity="%s" status="approved"><operation name=%s/></operationplan>\n' % (
+                quoteattr(i['name']), startdate, startdate, qty, quoteattr(operation))
+                logger.debug("yield result : %s " % result)
+                yield '<operationplan reference=%s start="%s" end="%s" quantity="%s" status="approved"><operation name=%s/></operationplan>\n' % (
                     quoteattr(i['name']), startdate, startdate, qty, quoteattr(operation)
                 )
+        logger.debug("Read MOs finished")
         yield '</operationplans>\n'
 
 
@@ -953,6 +1049,7 @@ class exporter(object):
         stock.report.prodlots.location_id.name -> buffer.location
         sum(stock.report.prodlots.qty) -> buffer.onhand
         '''
+        #Just a hack: Map BOGEN Lager DE to WH/Stock 
         yield '<!-- inventory -->\n'
         yield '<buffers>\n'
         self.env.cr.execute('SELECT product_id, location_id, sum(qty) '
@@ -964,6 +1061,9 @@ class exporter(object):
         for i in self.env.cr.fetchall():
             item = self.product_product.get(i[0], None)
             location = self.map_locations.get(i[1], None)
+            #Just a hack: Map BOGEN Lager DE to WH/Stock 
+            if location and location == 'BOGEN Lager DE':
+                location = 'WH/Stock' 
             if item and location:
                 inventory[ (item['name'], location) ] = i[2] + inventory.get( (item['name'], location), 0)
         for key, val in inventory.items():
