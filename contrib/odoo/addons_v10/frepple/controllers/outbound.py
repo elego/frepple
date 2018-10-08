@@ -946,7 +946,9 @@ class exporter(object):
         logger.debug("Read MOs")
         for i in recs.read(fields):
             logger.debug("Found MO %s" % i)
-            if i['state'] in ('in_production', 'confirmed', 'ready') and i['bom_id']:
+            # if i['state'] in ('in_production', 'confirmed', 'ready') and i['bom_id']: #in_production is progres, ready is done
+            # both seems not to be applicable for our clients
+            if i['state'] in ('planned', 'confirmed') and i['bom_id']: #in_production is progres
                 logger.debug("Checked MO")
                 logger.debug("map_locations %s"  % self.map_locations)
                 logger.debug("location_dest_id %s"  % i['location_dest_id'][0])
