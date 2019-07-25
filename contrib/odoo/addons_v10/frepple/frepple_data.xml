@@ -77,7 +77,8 @@
       name="Advanced planning - frePPLe"
       parent="mrp.menu_mrp_root"
       sequence="100"
-      action="action_frepple_web"/>
+      action="action_frepple_web"
+      groups="group_frepple_menu"/>
 
     <!-- frePPle plan editor in manufacturing menu. -->
     <record id="action_frepple_planeditor" model="ir.actions.client">
@@ -89,6 +90,7 @@
       parent="mrp.menu_mrp_manufacturing"
       sequence="30"
       action="action_frepple_planeditor"
+      groups="group_frepple_menu"
       />
 
     <!-- frePPle forecast editor in sales menu. -->

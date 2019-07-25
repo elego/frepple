@@ -17,6 +17,7 @@
     ],
     'external_dependencies': {'python': ['jwt']},
     'data': [
+        'security/frepple_security.xml',
         'frepple_data.xml',
     ],
     'demo': [],
