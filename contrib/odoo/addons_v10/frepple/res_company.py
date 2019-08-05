@@ -23,7 +23,7 @@ from odoo import api, models, fields, exceptions
 _logger = logging.getLogger(__name__)
 
 try:
-    import jwt
+    import PyJWT
 except:
     _logger.error('PyJWT module has not been installed. Please install the library from https://pypi.python.org/pypi/PyJWT')
 
@@ -54,7 +54,7 @@ class ResCompany(models.Model):
         encode_params = dict(exp=round(time.time()) + 600,
                              user=self.env.user.login,
                              navbar=self.env.context.get("navbar", True))
-        webtoken = jwt.encode(encode_params,
+        webtoken = PyJWT.encode(encode_params,
                               user_company_webtoken,
                               algorithm='HS256').decode('ascii')
         _url = self.env.context.get("url", "/")

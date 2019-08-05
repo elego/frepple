@@ -18,7 +18,7 @@
 import base64
 import email
 import json
-import jwt
+import PyJWT
 import time
 from urllib.request import urlopen, HTTPError, Request
 from xml.sax.saxutils import quoteattr
@@ -54,7 +54,7 @@ def Upload(request):
       '--%s' % boundary,
       'Content-Disposition: form-data; name="webtoken"\r',
       '\r',
-      '%s\r' % jwt.encode({
+      '%s\r' % PyJWT.encode({
         'exp': round(time.time()) + 600,
         'user': odoo_user,
         },

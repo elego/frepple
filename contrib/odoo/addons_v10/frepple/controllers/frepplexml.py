@@ -27,7 +27,7 @@ from odoo.addons.frepple.controllers.outbound import exporter
 from odoo.addons.frepple.controllers.inbound import importer
 
 try:
-   import jwt
+   import PyJWT
 except:
    logger.error('PyJWT module has not been installed. Please install the library from https://pypi.python.org/pypi/PyJWT')
 
@@ -132,7 +132,7 @@ class XMLController(odoo.http.Controller):
             # Verify that the data was posted from frePPLe and nobody else
             try:
               webtoken = req.httprequest.form.get('webtoken', None)
-              decoded = jwt.decode(
+              decoded = PyJWT.decode(
                 webtoken,
                 company.webtoken_key,
                 algorithms=['HS256']
