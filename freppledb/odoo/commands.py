@@ -16,7 +16,7 @@
 #
 import base64
 import email
-import PyJWT
+import jwt
 import os
 import time
 import logging
@@ -265,7 +265,7 @@ class OdooWritePlan(PlanTask):
       yield '--%s\r' % boundary
       yield 'Content-Disposition: form-data; name="webtoken"\r'
       yield '\r'
-      yield '%s\r' % PyJWT.encode({
+      yield '%s\r' % jwt.encode({
         'exp': round(time.time()) + 600,
         'user': odoo_user,
         },

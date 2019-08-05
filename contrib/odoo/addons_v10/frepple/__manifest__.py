@@ -16,7 +16,7 @@
         'resource',
         'mrp'
     ],
-    'external_dependencies': {'python': ['PyJWT']},
+    'external_dependencies': {'python': ['jwt']},
     'data': [
         'security/frepple_security.xml',
         'frepple_data.xml',

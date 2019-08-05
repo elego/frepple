@@ -16,7 +16,7 @@
 #
 
 import base64
-import PyJWT
+import jwt
 import time
 
 from django.conf import settings
@@ -201,4 +201,4 @@ def getWebserviceAuthorization(**kwargs):
       payload["exp"] = round(time.time()) + value
     else:
       payload[key] = value
-  return PyJWT.encode(payload, settings.SECRET_KEY, algorithm='HS256').decode('ascii')
+  return jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256').decode('ascii')

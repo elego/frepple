@@ -46,7 +46,7 @@ packages = [
   # Added for cx_freeze binaries
   'cx_Logging',
   # Request for json web tokents
-  'PyJWT',
+  'jwt',
   # Required for requests package
   'idna', 'urllib3', 'chardet'
   ]
