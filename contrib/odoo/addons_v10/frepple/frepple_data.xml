@@ -66,7 +66,7 @@
     <!-- Menu item under "Warehouse / Schedulers" -->
     <menuitem action="action_generate_plan" id="menu_generate_plan"
       parent="stock.menu_stock_sched"
-      sequence="100" groups="group_frepple_menu"/>
+      sequence="100" />
 
     <!-- Complete frePPLe UI in manufacturing menu. -->
     <record id="action_frepple_web" model="ir.actions.client">
@@ -78,7 +78,7 @@
       parent="mrp.menu_mrp_root"
       sequence="100"
       action="action_frepple_web"
-      groups="group_frepple_menu"/>
+      />
 
     <!-- frePPle plan editor in manufacturing menu. -->
     <record id="action_frepple_planeditor" model="ir.actions.client">
@@ -90,7 +90,7 @@
       parent="mrp.menu_mrp_manufacturing"
       sequence="30"
       action="action_frepple_planeditor"
-      groups="group_frepple_menu"
+      
       />
 
     <!-- frePPle forecast editor in sales menu. -->
@@ -103,7 +103,6 @@
       parent="sales_team.menu_sales"
       sequence="100"
       action="action_frepple_forecast_editor"
-      groups="group_frepple_menu"
       />
 
     <!-- frePPle inventory planning in inventory menu. -->
@@ -116,7 +115,6 @@
       parent="stock.menu_stock_inventory_control"
       sequence="100"
       action="action_frepple_inventoryplanning"
-      groups="group_frepple_menu"
       />
 
     <!-- Plan information tab on a sales order. -->
