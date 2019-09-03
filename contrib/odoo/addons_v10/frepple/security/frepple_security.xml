@@ -5,6 +5,6 @@
         <field name="name">Show frePPLe menu</field>
 	<field name="category_id" ref="base.module_category_hidden"/>
 	<field name="users" eval="[(4, ref('base.user_root'))]"/>
-	<field name="menu_access" eval="[(4, ref('frepple.menu_frepple_web')), (4, ref('menu_frepple_planeditor')), (4, ref('menu_frepple_forecast_editor')), (4, ref('menu_frepple_inventoryplanning')), (4, ref('menu_generate_plan')) ]"/>
+	<field name="menu_access" eval="[(4, ref('menu_frepple_web')), (4, ref('menu_frepple_planeditor')), (4, ref('menu_frepple_forecast_editor')), (4, ref('menu_frepple_inventoryplanning')), (4, ref('menu_generate_plan')) ]"/>
     </record>
 </odoo>
